@@ -162,7 +162,7 @@ If you use AR-Agent in your research, please cite:
 ```bibtex
 @article{guo2024ar_agent,
   title={3M-AR-Agent: Medical Multimodal Augmented Reality Agent based on LLaVA-NeXT-Med},
-  author={Guo, Yunfei and Zhou, Shiling and Huang, Wu and Qin, Fengmei},
+  author={Guo, Y},
   journal={arXiv preprint},
   year={2024}
 }

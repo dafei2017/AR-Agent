@@ -1,0 +1,325 @@
+# AR-Agent Configuration File
+# Medical Multimodal Augmented Reality Agent Configuration
+
+# Model Configuration
+model:
+  # LLaVA-NeXT-Med model settings
+  name: "llava-hf/llava-v1.6-mistral-7b-hf"
+  alternative_models:
+    - "llava-hf/llava-v1.6-vicuna-7b-hf"
+    - "llava-hf/llava-v1.6-34b-hf"
+  
+  # Model loading parameters
+  device: "auto"  # "auto", "cuda", "cpu"
+  load_in_4bit: true
+  load_in_8bit: false
+  torch_dtype: "float16"  # "float16", "float32", "bfloat16"
+  
+  # Generation parameters
+  max_new_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+  do_sample: true
+  repetition_penalty: 1.1
+  
+  # Medical-specific settings
+  medical_mode: true
+  confidence_threshold: 0.7
+  enable_structured_output: true
+
+# AR Engine Configuration
+ar_engine:
+  # Camera settings
+  camera:
+    device_id: 0
+    resolution:
+      width: 1280
+      height: 720
+    fps: 30
+    auto_exposure: true
+    auto_focus: true
+  
+  # Tracking settings
+  tracking:
+    enabled: true
+    method: "feature_based"  # "feature_based", "marker_based", "slam"
+    confidence_threshold: 0.5
+    max_features: 1000
+    feature_quality: 0.01
+    min_distance: 10
+  
+  # Rendering settings
+  rendering:
+    enable_annotations: true
+    enable_measurements: true
+    enable_overlays: true
+    overlay_alpha: 0.7
+    annotation_font_size: 1.0
+    measurement_line_thickness: 2
+  
+  # AR modes
+  modes:
+    default: "overlay"
+    available:
+      - "overlay"
+      - "annotation"
+      - "measurement"
+      - "comparison"
+      - "guidance"
+
+# Web Interface Configuration
+web_interface:
+  # Flask settings
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  threaded: true
+  
+  # Security settings
+  secret_key: "your-secret-key-change-this"
+  max_content_length: 16777216  # 16MB
+  
+  # Upload settings
+  upload:
+    allowed_extensions:
+      - "jpg"
+      - "jpeg"
+      - "png"
+      - "bmp"
+      - "tiff"
+      - "dicom"
+      - "dcm"
+    max_file_size: 10485760  # 10MB
+    upload_folder: "uploads"
+  
+  # Session settings
+  session:
+    permanent: false
+    lifetime: 3600  # 1 hour
+
+# Medical Analysis Configuration
+medical_analysis:
+  # Analysis types
+  default_type: "general"
+  available_types:
+    - "general"
+    - "radiology"
+    - "pathology"
+    - "dermatology"
+    - "ophthalmology"
+    - "cardiology"
+    - "neurology"
+  
+  # Prompt templates
+  prompts:
+    general: |
+      You are a medical AI assistant specialized in analyzing medical images. 
+      Provide a detailed, professional analysis of this medical image. 
+      Include: 1) Description of visible structures, 2) Notable findings, 
+      3) Potential abnormalities, 4) Clinical significance. 
+      Be precise and use appropriate medical terminology.
+    
+    radiology: |
+      As a radiologist AI, analyze this medical imaging study. 
+      Describe the imaging modality, anatomical structures visible, 
+      any pathological findings, and provide a structured report 
+      with impression and recommendations.
+    
+    pathology: |
+      Analyze this pathology image as a pathologist would. 
+      Describe the tissue type, cellular morphology, 
+      any abnormal findings, and suggest potential diagnoses 
+      based on the histological features observed.
+  
+  # Output formatting
+  output:
+    include_confidence: true
+    include_recommendations: true
+    include_structured_report: true
+    export_formats:
+      - "json"
+      - "text"
+      - "pdf"
+
+# Data Management
+data:
+  # Storage settings
+  storage:
+    base_path: "./data"
+    images_path: "./data/images"
+    results_path: "./data/results"
+    models_path: "./data/models"
+    cache_path: "./data/cache"
+  
+  # Database settings (if using database)
+  database:
+    enabled: false
+    type: "sqlite"  # "sqlite", "postgresql", "mysql"
+    url: "sqlite:///ar_agent.db"
+    echo: false
+  
+  # Backup settings
+  backup:
+    enabled: true
+    interval: 86400  # 24 hours
+    retention_days: 30
+    compress: true
+
+# Logging Configuration
+logging:
+  level: "INFO"  # "DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  
+  # File logging
+  file:
+    enabled: true
+    filename: "logs/ar_agent.log"
+    max_bytes: 10485760  # 10MB
+    backup_count: 5
+  
+  # Console logging
+  console:
+    enabled: true
+    level: "INFO"
+
+# Performance Configuration
+performance:
+  # Memory management
+  memory:
+    max_cache_size: 1073741824  # 1GB
+    clear_cache_interval: 3600  # 1 hour
+    enable_memory_monitoring: true
+  
+  # Processing
+  processing:
+    max_concurrent_analyses: 3
+    batch_size: 1
+    enable_gpu_acceleration: true
+    mixed_precision: true
+  
+  # Optimization
+  optimization:
+    enable_model_caching: true
+    enable_result_caching: true
+    cache_ttl: 3600  # 1 hour
+
+# Security Configuration
+security:
+  # Authentication (if needed)
+  authentication:
+    enabled: false
+    method: "basic"  # "basic", "oauth", "jwt"
+    session_timeout: 3600
+  
+  # API security
+  api:
+    rate_limiting:
+      enabled: true
+      requests_per_minute: 60
+      requests_per_hour: 1000
+    
+    cors:
+      enabled: true
+      origins:
+        - "http://localhost:3000"
+        - "http://127.0.0.1:3000"
+  
+  # Data privacy
+  privacy:
+    anonymize_uploads: true
+    auto_delete_uploads: true
+    upload_retention_hours: 24
+    log_retention_days: 30
+
+# Integration Configuration
+integration:
+  # External APIs
+  external_apis:
+    enabled: false
+    timeout: 30
+    retry_attempts: 3
+  
+  # DICOM support
+  dicom:
+    enabled: true
+    anonymize: true
+    supported_modalities:
+      - "CT"
+      - "MRI"
+      - "X-RAY"
+      - "US"
+      - "PET"
+      - "SPECT"
+  
+  # Export formats
+  export:
+    formats:
+      - "json"
+      - "xml"
+      - "csv"
+      - "pdf"
+    include_metadata: true
+    compress_exports: true
+
+# Development Configuration
+development:
+  # Debug settings
+  debug:
+    enabled: false
+    profiling: false
+    memory_profiling: false
+    timing: false
+  
+  # Testing
+  testing:
+    mock_model: false
+    test_data_path: "./tests/data"
+    enable_test_routes: false
+  
+  # Monitoring
+  monitoring:
+    enabled: true
+    metrics_endpoint: "/metrics"
+    health_endpoint: "/health"
+    status_endpoint: "/status"
+
+# Deployment Configuration
+deployment:
+  # Environment
+  environment: "development"  # "development", "staging", "production"
+  
+  # Docker settings
+  docker:
+    image_name: "ar-agent"
+    tag: "latest"
+    expose_port: 5000
+    volume_mounts:
+      - "./data:/app/data"
+      - "./logs:/app/logs"
+  
+  # Scaling
+  scaling:
+    workers: 1
+    threads_per_worker: 4
+    max_requests: 1000
+    max_requests_jitter: 100
+
+# Feature Flags
+features:
+  # Experimental features
+  experimental:
+    enable_3d_visualization: false
+    enable_ai_recommendations: true
+    enable_collaborative_analysis: false
+  
+  # Beta features
+  beta:
+    enable_voice_commands: false
+    enable_gesture_control: false
+    enable_eye_tracking: false
+  
+  # Legacy support
+  legacy:
+    support_old_api: true
+    enable_fallback_model: true

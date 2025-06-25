@@ -1,0 +1,356 @@
+# Docker Compose configuration for AR-Agent
+# Medical Multimodal Augmented Reality Agent
+
+version: '3.8'
+
+services:
+  # Main AR-Agent application
+  ar-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ar-agent-app
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
+      - CUDA_VISIBLE_DEVICES=0
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./uploads:/app/uploads
+      - ./configs:/app/configs
+    depends_on:
+      - redis
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Development version with hot reload
+  ar-agent-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ar-agent-dev
+    ports:
+      - "5001:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - PYTHONPATH=/app
+    volumes:
+      - .:/app
+      - ./data:/app/data
+      - ./logs:/app/logs
+    networks:
+      - ar-agent-network
+    profiles:
+      - dev
+    command: ["python", "app.py"]
+
+  # Redis for caching and session storage
+  redis:
+    image: redis:7-alpine
+    container_name: ar-agent-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+
+  # PostgreSQL database (optional)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ar-agent-postgres
+    environment:
+      - POSTGRES_DB=ar_agent
+      - POSTGRES_USER=ar_agent
+      - POSTGRES_PASSWORD=ar_agent_password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - database
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: ar-agent-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/ssl:/etc/nginx/ssl
+      - ./static:/var/www/static
+    depends_on:
+      - ar-agent
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: ar-agent-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: ar-agent-grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    depends_on:
+      - prometheus
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Jupyter notebook for development and analysis
+  jupyter:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: ar-agent-jupyter
+    ports:
+      - "8888:8888"
+    environment:
+      - JUPYTER_ENABLE_LAB=yes
+    volumes:
+      - .:/app
+      - ./notebooks:/app/notebooks
+      - ./data:/app/data
+    networks:
+      - ar-agent-network
+    command: >
+      bash -c "pip install jupyterlab &&
+               jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --NotebookApp.token='' --NotebookApp.password=''"
+    profiles:
+      - dev
+
+  # Model serving with TorchServe (alternative deployment)
+  torchserve:
+    image: pytorch/torchserve:latest-gpu
+    container_name: ar-agent-torchserve
+    ports:
+      - "8080:8080"
+      - "8081:8081"
+      - "8082:8082"
+    volumes:
+      - ./models:/home/model-server/model-store
+      - ./torchserve-config:/home/model-server/config
+    environment:
+      - CUDA_VISIBLE_DEVICES=0
+    networks:
+      - ar-agent-network
+    profiles:
+      - torchserve
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # File storage service (MinIO)
+  minio:
+    image: minio/minio:latest
+    container_name: ar-agent-minio
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      - MINIO_ROOT_USER=ar_agent
+      - MINIO_ROOT_PASSWORD=ar_agent_password
+    volumes:
+      - minio-data:/data
+    networks:
+      - ar-agent-network
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    profiles:
+      - storage
+
+  # Elasticsearch for logging and search
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: ar-agent-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # Kibana for log visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: ar-agent-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+    networks:
+      - ar-agent-network
+    restart: unless-stopped
+    profiles:
+      - logging
+
+  # Celery worker for background tasks
+  celery-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ar-agent-celery-worker
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - ar-agent-network
+    command: celery -A app.celery worker --loglevel=info
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  # Celery beat scheduler
+  celery-beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ar-agent-celery-beat
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    depends_on:
+      - redis
+    networks:
+      - ar-agent-network
+    command: celery -A app.celery beat --loglevel=info
+    restart: unless-stopped
+    profiles:
+      - celery
+
+  # Flower for Celery monitoring
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: ar-agent-flower
+    environment:
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+    networks:
+      - ar-agent-network
+    command: celery -A app.celery flower --port=5555
+    restart: unless-stopped
+    profiles:
+      - celery
+
+networks:
+  ar-agent-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-data:
+    driver: local
+  postgres-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  minio-data:
+    driver: local
+  elasticsearch-data:
+    driver: local
+
+# Override configurations for different environments
+# Usage examples:
+# Development: docker-compose --profile dev up
+# Production: docker-compose --profile production up
+# Full monitoring: docker-compose --profile monitoring up
+# With database: docker-compose --profile database up
+# With storage: docker-compose --profile storage up
+# With logging: docker-compose --profile logging up
+# With Celery: docker-compose --profile celery up
+# All services: docker-compose --profile dev --profile monitoring --profile database up
